@@ -5,7 +5,7 @@
 use panic_halt as _;
 use arduino_hal::port::mode::PwmOutput;
 use arduino_hal::port::Pin;
-use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, PwmPinOps, Timer0Pwm};
+use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, PwmPinOps, Timer2Pwm};
 use core::cell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -37,9 +37,9 @@ fn interrupted() -> bool {
 
 const MORSE_UNIT: u16 = 250;
 
-fn blink<X>(led: &mut Pin<PwmOutput<Timer0Pwm>, X>, factor: u16)
+fn blink<X>(led: &mut Pin<PwmOutput<Timer2Pwm>, X>, factor: u16)
 where
-    X: PwmPinOps<Timer0Pwm>,
+    X: PwmPinOps<Timer2Pwm>,
 {
     led.enable();
     arduino_hal::delay_ms(MORSE_UNIT * factor);
@@ -49,9 +49,9 @@ where
 
 const SOS_BLINKS: [u16; 9] = [1, 1, 1, 3, 3, 3, 1, 1, 1];
 
-fn sos<X>(led: &mut Pin<PwmOutput<Timer0Pwm>, X>)
+fn sos<X>(led: &mut Pin<PwmOutput<Timer2Pwm>, X>)
 where
-    X: PwmPinOps<Timer0Pwm>,
+    X: PwmPinOps<Timer2Pwm>,
 {
     led.set_duty(255);
     loop {
@@ -70,9 +70,9 @@ where
     }
 }
 
-fn pulse<X>(led: &mut Pin<PwmOutput<Timer0Pwm>, X>)
+fn pulse<X>(led: &mut Pin<PwmOutput<Timer2Pwm>, X>)
 where
-    X: PwmPinOps<Timer0Pwm>,
+    X: PwmPinOps<Timer2Pwm>,
 {
     led.enable();
     loop {
@@ -95,19 +95,19 @@ const MILLIS_INCREMENT: u32 = PRESCALER * TIMER_COUNTS / 16000;
 static MILLIS_COUNTER: avr_device::interrupt::Mutex<cell::Cell<u32>> =
     avr_device::interrupt::Mutex::new(cell::Cell::new(0));
 
-fn millis_init(tc2: &arduino_hal::pac::TC2) {
+fn millis_init(tc0: &arduino_hal::pac::TC0) {
     // Configure the timer for the above interval (in CTC mode)
     // and enable its interrupt.
-    tc2.tccr2a.write(|w| w.wgm2().ctc());
-    tc2.ocr2a.write(|w| w.bits(TIMER_COUNTS as u8));
-    tc2.tccr2b.write(|w| match PRESCALER {
-        8 => w.cs2().prescale_8(),
-        64 => w.cs2().prescale_64(),
-        256 => w.cs2().prescale_256(),
-        1024 => w.cs2().prescale_1024(),
+    tc0.tccr0a.write(|w| w.wgm0().ctc());
+    tc0.ocr0a.write(|w| w.bits(TIMER_COUNTS as u8));
+    tc0.tccr0b.write(|w| match PRESCALER {
+        8 => w.cs0().prescale_8(),
+        64 => w.cs0().prescale_64(),
+        256 => w.cs0().prescale_256(),
+        1024 => w.cs0().prescale_1024(),
         _ => panic!(),
     });
-    tc2.timsk2.write(|w| w.ocie2a().set_bit());
+    tc0.timsk0.write(|w| w.ocie0a().set_bit());
 
     // Reset the global millisecond counter
     avr_device::interrupt::free(|cs| {
@@ -116,7 +116,7 @@ fn millis_init(tc2: &arduino_hal::pac::TC2) {
 }
 
 #[avr_device::interrupt(atmega328p)]
-fn TIMER2_COMPA() {
+fn TIMER0_COMPA() {
     avr_device::interrupt::free(|cs| {
         let counter_cell = MILLIS_COUNTER.borrow(cs);
         let counter = counter_cell.get();
@@ -143,9 +143,9 @@ fn main() -> ! {
     // let mut status_led = pins.d13.into_output();
     // status_led.set_low();
 
-    millis_init(&dp.TC2);
-    let timer = Timer0Pwm::new(dp.TC0, Prescaler::Prescale64);
-    let mut pwm_led = pins.d6.into_output().into_pwm(&timer);
+    millis_init(&dp.TC0);
+    let timer = Timer2Pwm::new(dp.TC2, Prescaler::Prescale64);
+    let mut pwm_led = pins.d3.into_output().into_pwm(&timer);
 
     unsafe { avr_device::interrupt::enable() };
 
