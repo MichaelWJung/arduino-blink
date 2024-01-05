@@ -1,18 +1,36 @@
+use avr_device::interrupt::Mutex;
 use core::cell::Cell;
 
-const PRESCALER: u32 = 1024;
-const TIMER_COUNTS: u32 = 125;
+const FREQ_CPU: u32 = 16_000_000;
+const CLOCK_CYCLES_PER_MICROSECOND: u32 = FREQ_CPU / 1_000_000;
+const PRESCALER: u32 = 64;
 
-const MILLIS_INCREMENT: u32 = PRESCALER * TIMER_COUNTS / 16000;
+const fn clock_cycles_to_microseconds(cycles: u32) -> u32 {
+    cycles / CLOCK_CYCLES_PER_MICROSECOND
+}
 
-static MILLIS_COUNTER: avr_device::interrupt::Mutex<Cell<u32>> =
-    avr_device::interrupt::Mutex::new(Cell::new(0));
+// the prescaler is set so that timer0 ticks every 64 clock cycles, and the
+// the overflow handler is called every 256 ticks.
+// Should be 1024.
+const MICROSECONDS_PER_TIMER0_OVERFLOW: u32 = clock_cycles_to_microseconds(PRESCALER * 256);
+
+// the whole number of milliseconds per timer0 overflow
+const MILLIS_INC: u32 = MICROSECONDS_PER_TIMER0_OVERFLOW / 1000;
+
+// the fractional number of milliseconds per timer0 overflow. we shift right
+// by three to fit these numbers into a byte. (for the clock speeds we care
+// about - 8 and 16 MHz - this doesn't lose precision.)
+const FRACT_INC: u8 = ((MICROSECONDS_PER_TIMER0_OVERFLOW % 1000) >> 3) as u8;
+const FRACT_MAX: u8 = (1000 >> 3) as u8;
+
+static TIMER0_OVERFLOW_COUNT: Mutex<Cell<u32>> = Mutex::new(Cell::new(0));
+static TIMER0_MILLIS: Mutex<Cell<u32>> = Mutex::new(Cell::new(0));
 
 pub fn millis_init(tc0: &arduino_hal::pac::TC0) {
     // Configure the timer for the above interval (in CTC mode)
     // and enable its interrupt.
-    tc0.tccr0a.write(|w| w.wgm0().ctc());
-    tc0.ocr0a.write(|w| w.bits(TIMER_COUNTS as u8));
+    tc0.tccr0a.write(|w| w.wgm0().pwm_fast());
+    // tc0.ocr0a.write(|w| w.bits(TIMER_COUNTS as u8));
     tc0.tccr0b.write(|w| match PRESCALER {
         8 => w.cs0().prescale_8(),
         64 => w.cs0().prescale_64(),
@@ -20,23 +38,36 @@ pub fn millis_init(tc0: &arduino_hal::pac::TC0) {
         1024 => w.cs0().prescale_1024(),
         _ => panic!(),
     });
-    tc0.timsk0.write(|w| w.ocie0a().set_bit());
+    tc0.timsk0.write(|w| w.toie0().set_bit());
 
     // Reset the global millisecond counter
     avr_device::interrupt::free(|cs| {
-        MILLIS_COUNTER.borrow(cs).set(0);
+        TIMER0_MILLIS.borrow(cs).set(0);
+        // MILLIS_COUNTER.borrow(cs).set(0);
     });
 }
 
 #[avr_device::interrupt(atmega328p)]
-fn TIMER0_COMPA() {
+fn TIMER0_OVF() {
     avr_device::interrupt::free(|cs| {
-        let counter_cell = MILLIS_COUNTER.borrow(cs);
-        let counter = counter_cell.get();
-        counter_cell.set(counter + MILLIS_INCREMENT);
+        static TIMER0_FRACT: Mutex<Cell<u8>> = Mutex::new(Cell::new(0));
+        let mut f = TIMER0_FRACT.borrow(cs).get();
+        let mut m = TIMER0_MILLIS.borrow(cs).get();
+        let overflow_count = TIMER0_OVERFLOW_COUNT.borrow(cs).get();
+
+        m = m.wrapping_add(MILLIS_INC);
+        f = f.wrapping_add(FRACT_INC);
+
+        if f >= FRACT_MAX {
+            f -= FRACT_MAX;
+            m += 1;
+        }
+        TIMER0_FRACT.borrow(cs).set(f);
+        TIMER0_MILLIS.borrow(cs).set(m);
+        TIMER0_OVERFLOW_COUNT.borrow(cs).set(overflow_count + 1);
     })
 }
 
 pub fn millis() -> u32 {
-    avr_device::interrupt::free(|cs| MILLIS_COUNTER.borrow(cs).get())
+    avr_device::interrupt::free(|cs| TIMER0_MILLIS.borrow(cs).get())
 }
