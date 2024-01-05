@@ -1,5 +1,6 @@
 use avr_device::interrupt::Mutex;
-use core::cell::Cell;
+use heapless::binary_heap::Min;
+use core::{cell::{Cell, RefCell}, task::Waker, ops::Deref, cmp::Ordering};
 
 const FREQ_CPU: u32 = 16_000_000;
 const CLOCK_CYCLES_PER_MICROSECOND: u32 = FREQ_CPU / 1_000_000;
@@ -65,8 +66,81 @@ fn TIMER0_OVF() {
         TIMER0_FRACT.borrow(cs).set(f);
         TIMER0_MILLIS.borrow(cs).set(m);
         TIMER0_OVERFLOW_COUNT.borrow(cs).set(overflow_count + 1);
+
+        WAKERS.borrow(cs).borrow_mut().wake_all_before(m);
     })
 }
+
+#[derive(Debug)]
+pub struct WakersHeapEntry {
+    wake_time: u32,
+    id: u8,
+    waker: Waker,
+}
+
+impl PartialEq for WakersHeapEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.wake_time == other.wake_time
+    }
+}
+
+impl Eq for WakersHeapEntry {
+}
+
+impl PartialOrd for WakersHeapEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.wake_time.partial_cmp(&other.wake_time)
+    }
+}
+
+impl Ord for WakersHeapEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.wake_time.cmp(&other.wake_time)
+    }
+}
+
+pub struct WakersHeap {
+    heap: heapless::BinaryHeap<WakersHeapEntry, Min, 10>,
+}
+
+fn wake_time_has_passed(entry: &WakersHeapEntry, now: u32) -> bool {
+    now >= entry.wake_time
+}
+
+impl WakersHeap {
+    const fn new() -> Self {
+        Self { heap: heapless::BinaryHeap::new() }
+    }
+
+    pub fn has_capacity(&self) -> bool {
+        self.heap.len() < self.heap.capacity()
+    }
+
+    pub fn replace_or_push(&mut self, wake_time: u32, id: u8, waker: Waker) -> Result<(), ()> {
+        for entry in self.heap.iter_mut() {
+            if entry.id == id {
+                entry.waker = waker;
+                return Ok(());
+            }
+        }
+        match self.heap.push(WakersHeapEntry{wake_time, id, waker}) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
+    }
+
+    fn wake_all_before(&mut self, now: u32) {
+        while let Some(entry) = self.heap.peek() {
+            if !wake_time_has_passed(entry, now) {
+                break;
+            }
+            entry.waker.wake_by_ref();
+            self.heap.pop();
+        }
+    }
+}
+
+pub static WAKERS: Mutex<RefCell<WakersHeap>> = Mutex::new(RefCell::new(WakersHeap::new()));
 
 pub fn millis() -> u32 {
     avr_device::interrupt::free(|cs| TIMER0_MILLIS.borrow(cs).get())

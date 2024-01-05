@@ -4,11 +4,13 @@
 
 mod blinks;
 mod executor;
+mod futures;
 mod timers;
 
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
+    futures::{Delay, r#yield},
     timers::{millis, millis_init},
 };
 
@@ -21,6 +23,7 @@ fn main() -> ! {
     let pins = arduino_hal::pins!(dp);
 
     let mut serial = arduino_hal::default_serial!(dp, pins, 57600);
+    ufmt::uwriteln!(&mut serial, "Booting up").unwrap();
 
     // Configure INT0 for rising edge. 0x02 would be falling edge.
     dp.EXINT.eicra.modify(|_, w| w.isc0().bits(0x03));
@@ -44,9 +47,15 @@ fn main() -> ! {
     ufmt::uwriteln!(&mut serial, "Nach erstem Geblinke: {}", millis()).unwrap();
 
     let executor = Executor::new();
-    let delay = executor.block_on(async {10_000});
+    // let delay = executor.block_on(
+    executor.block_on(
+        async {
+            // r#yield().await;
+            // 10_000
+            Delay::wait_for(3000).await;
+        });
 
-    arduino_hal::delay_ms(delay);
+    // arduino_hal::delay_ms(delay);
     loop {
         ufmt::uwriteln!(&mut serial, "In main loop: {}", millis()).unwrap();
         pulse(&mut pwm_led);
