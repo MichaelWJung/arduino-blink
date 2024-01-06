@@ -10,7 +10,7 @@ mod timers;
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
-    futures::{Delay, r#yield},
+    futures::{delay::Delay, yield_now::yield_now},
     timers::{millis, millis_init},
 };
 
