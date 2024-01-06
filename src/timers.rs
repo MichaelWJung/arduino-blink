@@ -3,7 +3,6 @@ use avr_device::interrupt::Mutex;
 use core::{
     cell::{Cell, RefCell},
     cmp::Ordering,
-    ops::Deref,
     task::Waker,
 };
 use heapless::binary_heap::Min;
@@ -50,7 +49,6 @@ pub fn millis_init(tc0: &arduino_hal::pac::TC0) {
     // Reset the global millisecond counter
     avr_device::interrupt::free(|cs| {
         TIMER0_MILLIS.borrow(cs).set(0);
-        // MILLIS_COUNTER.borrow(cs).set(0);
     });
 }
 
@@ -124,11 +122,9 @@ impl WakersHeap {
     }
 
     pub fn replace_or_push(&mut self, wake_time: u32, id: u16, waker: Waker) -> Result<(), ()> {
-        // dbgprint!("replace_or_push id {}", id);
         for entry in self.heap.iter_mut() {
             if entry.id == id {
                 entry.waker = waker;
-                // dbgprint!("Replacing Waker!");
                 return Ok(());
             }
         }
@@ -137,10 +133,7 @@ impl WakersHeap {
             id,
             waker,
         }) {
-            Ok(_) => {
-                // dbgprint!("Push Ok!");
-                Ok(())
-            }
+            Ok(_) => Ok(()),
             Err(_) => {
                 dbgprint!("Push NOT Ok!");
                 Err(())

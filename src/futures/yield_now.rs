@@ -4,6 +4,7 @@ use core::{
     task::{Context, Poll},
 };
 
+#[allow(dead_code)]
 pub async fn yield_now() {
     struct Yield {
         yielded: bool,

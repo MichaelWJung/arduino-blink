@@ -7,8 +7,6 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use core::{fmt, mem};
 
-use crate::dbgprint;
-
 #[derive(Debug)]
 enum MaybeDone<Fut: Future> {
     /// A not-yet-completed future
@@ -95,7 +93,6 @@ macro_rules! generate {
                 let this = unsafe { self.get_unchecked_mut() };
                 let mut all_done = true;
                 $(
-                    // dbgprint!("Polling in join");
                     all_done &= unsafe { Pin::new_unchecked(&mut this.$Fut) }.poll(cx);
                 )*
 
@@ -172,6 +169,7 @@ where
 /// assert_eq!(res, (1, 2, 3));
 /// # });
 /// ```
+#[allow(dead_code)]
 pub fn join3<Fut1, Fut2, Fut3>(
     future1: Fut1,
     future2: Fut2,
@@ -207,6 +205,7 @@ where
 /// assert_eq!(res, (1, 2, 3, 4));
 /// # });
 /// ```
+#[allow(dead_code)]
 pub fn join4<Fut1, Fut2, Fut3, Fut4>(
     future1: Fut1,
     future2: Fut2,
@@ -245,6 +244,7 @@ where
 /// assert_eq!(res, (1, 2, 3, 4, 5));
 /// # });
 /// ```
+#[allow(dead_code)]
 pub fn join5<Fut1, Fut2, Fut3, Fut4, Fut5>(
     future1: Fut1,
     future2: Fut2,
@@ -326,6 +326,7 @@ impl<Fut: Future, const N: usize> Future for JoinArray<Fut, N> {
 /// assert_eq!(res, [1, 2, 3]);
 /// # });
 /// ```
+#[allow(dead_code)]
 pub fn join_array<Fut: Future, const N: usize>(futures: [Fut; N]) -> JoinArray<Fut, N> {
     JoinArray {
         futures: futures.map(MaybeDone::Future),

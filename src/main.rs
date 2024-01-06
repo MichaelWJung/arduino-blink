@@ -11,7 +11,7 @@ use crate::{
     blinks::{pulse, sos},
     executor::Executor,
     futures::{delay::Delay, join::join},
-    timers::{millis, millis_init},
+    timers::millis_init,
 };
 
 use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer2Pwm};
@@ -54,7 +54,6 @@ fn main() -> ! {
     millis_init(&dp.TC0);
     let timer = Timer2Pwm::new(dp.TC2, Prescaler::Prescale64);
     let mut pwm_led = pins.d3.into_output().into_pwm(&timer);
-    // let mut pwm_led = pins.d3.into_output();
     let mut onboard_led = pins.d13.into_output();
     onboard_led.set_high();
 
@@ -68,42 +67,16 @@ fn main() -> ! {
     executor.block_on(join(
         async {
             loop {
-                //     dbgprint!("Running sos loop");
                 sos(&mut onboard_led).await;
             }
         },
         async {
             Delay::wait_for(1000).await;
             loop {
-                //     dbgprint!("Running pulse loop");
                 pulse(&mut pwm_led).await;
             }
         },
     ));
 
     loop {}
-
-    // ufmt::uwriteln!(&mut serial, "Nach init: {}", millis()).unwrap();
-    // // loop {
-    // {
-    //     pulse(&mut pwm_led);
-    //     sos(&mut pwm_led);
-    // }
-    // ufmt::uwriteln!(&mut serial, "Nach erstem Geblinke: {}", millis()).unwrap();
-
-    // let executor = Executor::new();
-    // // let delay = executor.block_on(
-    // executor.block_on(
-    //     async {
-    //         // r#yield().await;
-    //         // 10_000
-    //         Delay::wait_for(3000).await;
-    //     });
-
-    // // arduino_hal::delay_ms(delay);
-    // loop {
-    //     ufmt::uwriteln!(&mut serial, "In main loop: {}", millis()).unwrap();
-    //     pulse(&mut pwm_led);
-    //     sos(&mut pwm_led);
-    // }
 }

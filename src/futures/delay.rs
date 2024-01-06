@@ -6,7 +6,6 @@ use core::{
     task::{Context, Poll},
 };
 
-use crate::dbgprint;
 use crate::timers::{millis, WAKERS};
 
 static NEXT_DELAY_ID: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
@@ -33,22 +32,16 @@ impl Future for Delay {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // dbgprint!("Delay with id {} being polled", self.id);
         let now = millis();
         if now < self.wake_time {
-            // dbgprint!("Wake time not yet reached {}!", self.id);
             avr_device::interrupt::free(|cs| {
                 let mut wakers = WAKERS.borrow(cs).borrow_mut();
                 if wakers.has_capacity() {
-                    // dbgprint!("Waker has capacity ({})", self.id);
                     match wakers.replace_or_push(self.wake_time, self.id, cx.waker().clone()) {
                         Ok(_) => {}
-                        Err(_) => {
-                            // dbgprint!("replace_or_push failed! {}", self.id);
-                        }
+                        Err(_) => {}
                     }
                 } else {
-                    // dbgprint!("Waker has NO capacity ({})", self.id);
                 }
             });
             Poll::Pending
