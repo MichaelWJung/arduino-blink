@@ -4,13 +4,14 @@
 use core::{
     future::Future,
     sync::atomic::{AtomicBool, Ordering},
-    task::{Context, Poll, Waker, RawWaker, RawWakerVTable},
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
+
+use crate::dbgprint;
 
 use pin_utils::pin_mut;
 
-pub struct Executor {
-}
+pub struct Executor {}
 
 // NOTE `*const ()` is &AtomicBool
 static VTABLE: RawWakerVTable = {
@@ -41,22 +42,30 @@ impl Executor {
         let waker =
             unsafe { Waker::from_raw(RawWaker::new(&ready as *const _ as *const _, &VTABLE)) };
         let val = loop {
+            // dbgprint!("Executor loop");
             let mut task_woken = false;
             if ready.load(Ordering::Acquire) {
+                // dbgprint!("Task ready");
                 task_woken = true;
                 ready.store(false, Ordering::Release);
 
                 let mut cx = Context::from_waker(&waker);
+                // dbgprint!("Polling");
                 if let Poll::Ready(val) = f.as_mut().poll(&mut cx) {
+                    // dbgprint!("Task complete");
                     break val;
                 }
+                // dbgprint!("Task not complete");
             }
 
             if task_woken {
                 // If at least one task was woken up, do not sleep, try again
+                // dbgprint!("Trying once more as task woke up");
                 continue;
             }
+            // dbgprint!("Going to sleep");
             avr_device::asm::sleep();
+            // dbgprint!("Waking up from sleep");
         };
         val
     }

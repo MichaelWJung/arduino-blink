@@ -1,6 +1,12 @@
+use crate::dbgprint;
 use avr_device::interrupt::Mutex;
+use core::{
+    cell::{Cell, RefCell},
+    cmp::Ordering,
+    ops::Deref,
+    task::Waker,
+};
 use heapless::binary_heap::Min;
-use core::{cell::{Cell, RefCell}, task::Waker, ops::Deref, cmp::Ordering};
 
 const FREQ_CPU: u32 = 16_000_000;
 const CLOCK_CYCLES_PER_MICROSECOND: u32 = FREQ_CPU / 1_000_000;
@@ -74,7 +80,7 @@ fn TIMER0_OVF() {
 #[derive(Debug)]
 pub struct WakersHeapEntry {
     wake_time: u32,
-    id: u8,
+    id: u16,
     waker: Waker,
 }
 
@@ -84,8 +90,7 @@ impl PartialEq for WakersHeapEntry {
     }
 }
 
-impl Eq for WakersHeapEntry {
-}
+impl Eq for WakersHeapEntry {}
 
 impl PartialOrd for WakersHeapEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -109,23 +114,37 @@ fn wake_time_has_passed(entry: &WakersHeapEntry, now: u32) -> bool {
 
 impl WakersHeap {
     const fn new() -> Self {
-        Self { heap: heapless::BinaryHeap::new() }
+        Self {
+            heap: heapless::BinaryHeap::new(),
+        }
     }
 
     pub fn has_capacity(&self) -> bool {
         self.heap.len() < self.heap.capacity()
     }
 
-    pub fn replace_or_push(&mut self, wake_time: u32, id: u8, waker: Waker) -> Result<(), ()> {
+    pub fn replace_or_push(&mut self, wake_time: u32, id: u16, waker: Waker) -> Result<(), ()> {
+        // dbgprint!("replace_or_push id {}", id);
         for entry in self.heap.iter_mut() {
             if entry.id == id {
                 entry.waker = waker;
+                // dbgprint!("Replacing Waker!");
                 return Ok(());
             }
         }
-        match self.heap.push(WakersHeapEntry{wake_time, id, waker}) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(()),
+        match self.heap.push(WakersHeapEntry {
+            wake_time,
+            id,
+            waker,
+        }) {
+            Ok(_) => {
+                // dbgprint!("Push Ok!");
+                Ok(())
+            }
+            Err(_) => {
+                dbgprint!("Push NOT Ok!");
+                Err(())
+            }
         }
     }
 

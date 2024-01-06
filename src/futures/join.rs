@@ -7,6 +7,8 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use core::{fmt, mem};
 
+use crate::dbgprint;
+
 #[derive(Debug)]
 enum MaybeDone<Fut: Future> {
     /// A not-yet-completed future
@@ -93,6 +95,7 @@ macro_rules! generate {
                 let this = unsafe { self.get_unchecked_mut() };
                 let mut all_done = true;
                 $(
+                    // dbgprint!("Polling in join");
                     all_done &= unsafe { Pin::new_unchecked(&mut this.$Fut) }.poll(cx);
                 )*
 
@@ -169,7 +172,11 @@ where
 /// assert_eq!(res, (1, 2, 3));
 /// # });
 /// ```
-pub fn join3<Fut1, Fut2, Fut3>(future1: Fut1, future2: Fut2, future3: Fut3) -> Join3<Fut1, Fut2, Fut3>
+pub fn join3<Fut1, Fut2, Fut3>(
+    future1: Fut1,
+    future2: Fut2,
+    future3: Fut3,
+) -> Join3<Fut1, Fut2, Fut3>
 where
     Fut1: Future,
     Fut2: Future,
@@ -269,7 +276,9 @@ where
     Fut::Output: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("JoinArray").field("futures", &self.futures).finish()
+        f.debug_struct("JoinArray")
+            .field("futures", &self.futures)
+            .finish()
     }
 }
 
@@ -283,7 +292,8 @@ impl<Fut: Future, const N: usize> Future for JoinArray<Fut, N> {
         }
 
         if all_done {
-            let mut array: [MaybeUninit<Fut::Output>; N] = unsafe { MaybeUninit::uninit().assume_init() };
+            let mut array: [MaybeUninit<Fut::Output>; N] =
+                unsafe { MaybeUninit::uninit().assume_init() };
             for i in 0..N {
                 array[i].write(this.futures[i].take_output());
             }

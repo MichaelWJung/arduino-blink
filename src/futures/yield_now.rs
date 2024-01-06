@@ -1,4 +1,8 @@
-use core::{future::Future, task::{Poll, Context}, pin::Pin};
+use core::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 pub async fn yield_now() {
     struct Yield {

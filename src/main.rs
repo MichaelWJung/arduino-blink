@@ -10,23 +10,27 @@ mod timers;
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
-    futures::{delay::Delay, yield_now::yield_now},
+    futures::{delay::Delay, join::join},
     timers::{millis, millis_init},
 };
 
 use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer2Pwm};
 use panic_halt as _;
 
-type Serial =  arduino_hal::Usart<
-      arduino_hal::pac::USART0,
-      arduino_hal::port::Pin<arduino_hal::port::mode::Input,arduino_hal::hal::port::PD0>,
-      arduino_hal::port::Pin<arduino_hal::port::mode::Output,arduino_hal::hal::port::PD1>,
-  >;
+type Serial = arduino_hal::Usart<
+    arduino_hal::pac::USART0,
+    arduino_hal::port::Pin<arduino_hal::port::mode::Input, arduino_hal::hal::port::PD0>,
+    arduino_hal::port::Pin<arduino_hal::port::mode::Output, arduino_hal::hal::port::PD1>,
+>;
 
 static mut SERIAL_PTR: *mut Serial = core::ptr::null_mut();
-// unsafe {
-//     ufmt::uwriteln!(&mut *SERIAL_PTR, "wakers len: {}, cap: {}", wakers.len(), wakers.capacity()).unwrap();
-// }
+
+macro_rules! dbgprint {
+    ($($args:expr),*) => {{
+        unsafe { ufmt::uwriteln!(&mut *crate::SERIAL_PTR, $($args)*).unwrap(); }
+    }};
+}
+pub(crate) use dbgprint;
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -34,7 +38,9 @@ fn main() -> ! {
     let pins = arduino_hal::pins!(dp);
 
     let mut serial = arduino_hal::default_serial!(dp, pins, 57600);
-    unsafe { SERIAL_PTR = &mut serial; }
+    unsafe {
+        SERIAL_PTR = &mut serial;
+    }
     ufmt::uwriteln!(&mut serial, "Booting up").unwrap();
 
     // Configure INT0 for rising edge. 0x02 would be falling edge.
@@ -44,33 +50,60 @@ fn main() -> ! {
 
     pins.d2.into_pull_up_input();
 
+    ufmt::uwriteln!(&mut serial, "A").unwrap();
     millis_init(&dp.TC0);
     let timer = Timer2Pwm::new(dp.TC2, Prescaler::Prescale64);
     let mut pwm_led = pins.d3.into_output().into_pwm(&timer);
+    // let mut pwm_led = pins.d3.into_output();
+    let mut onboard_led = pins.d13.into_output();
+    onboard_led.set_high();
 
+    ufmt::uwriteln!(&mut serial, "B").unwrap();
+    dbgprint!("ABC");
+    arduino_hal::delay_ms(300);
     unsafe { avr_device::interrupt::enable() };
 
-    ufmt::uwriteln!(&mut serial, "Nach init: {}", millis()).unwrap();
-    // loop {
-    {
-        pulse(&mut pwm_led);
-        sos(&mut pwm_led);
-    }
-    ufmt::uwriteln!(&mut serial, "Nach erstem Geblinke: {}", millis()).unwrap();
-
+    ufmt::uwriteln!(&mut serial, "C").unwrap();
     let executor = Executor::new();
-    // let delay = executor.block_on(
-    executor.block_on(
+    executor.block_on(join(
         async {
-            // r#yield().await;
-            // 10_000
-            Delay::wait_for(3000).await;
-        });
+            loop {
+                //     dbgprint!("Running sos loop");
+                sos(&mut onboard_led).await;
+            }
+        },
+        async {
+            Delay::wait_for(1000).await;
+            loop {
+                //     dbgprint!("Running pulse loop");
+                pulse(&mut pwm_led).await;
+            }
+        },
+    ));
 
-    // arduino_hal::delay_ms(delay);
-    loop {
-        ufmt::uwriteln!(&mut serial, "In main loop: {}", millis()).unwrap();
-        pulse(&mut pwm_led);
-        sos(&mut pwm_led);
-    }
+    loop {}
+
+    // ufmt::uwriteln!(&mut serial, "Nach init: {}", millis()).unwrap();
+    // // loop {
+    // {
+    //     pulse(&mut pwm_led);
+    //     sos(&mut pwm_led);
+    // }
+    // ufmt::uwriteln!(&mut serial, "Nach erstem Geblinke: {}", millis()).unwrap();
+
+    // let executor = Executor::new();
+    // // let delay = executor.block_on(
+    // executor.block_on(
+    //     async {
+    //         // r#yield().await;
+    //         // 10_000
+    //         Delay::wait_for(3000).await;
+    //     });
+
+    // // arduino_hal::delay_ms(delay);
+    // loop {
+    //     ufmt::uwriteln!(&mut serial, "In main loop: {}", millis()).unwrap();
+    //     pulse(&mut pwm_led);
+    //     sos(&mut pwm_led);
+    // }
 }
