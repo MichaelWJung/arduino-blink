@@ -17,12 +17,24 @@ use crate::{
 use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer2Pwm};
 use panic_halt as _;
 
+type Serial =  arduino_hal::Usart<
+      arduino_hal::pac::USART0,
+      arduino_hal::port::Pin<arduino_hal::port::mode::Input,arduino_hal::hal::port::PD0>,
+      arduino_hal::port::Pin<arduino_hal::port::mode::Output,arduino_hal::hal::port::PD1>,
+  >;
+
+static mut SERIAL_PTR: *mut Serial = core::ptr::null_mut();
+// unsafe {
+//     ufmt::uwriteln!(&mut *SERIAL_PTR, "wakers len: {}, cap: {}", wakers.len(), wakers.capacity()).unwrap();
+// }
+
 #[arduino_hal::entry]
 fn main() -> ! {
     let dp = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(dp);
 
     let mut serial = arduino_hal::default_serial!(dp, pins, 57600);
+    unsafe { SERIAL_PTR = &mut serial; }
     ufmt::uwriteln!(&mut serial, "Booting up").unwrap();
 
     // Configure INT0 for rising edge. 0x02 would be falling edge.
