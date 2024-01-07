@@ -3,17 +3,6 @@
 version = 3
 
 [[package]]
-name = "ag-lcd"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe7fa3188fa640f8e82d715e5803acd2f81a2dfc95153b7ff6ee8c23f504cdfc"
-dependencies = [
- "embedded-hal",
- "port-expander",
- "shared-bus",
-]
-
-[[package]]
 name = "arduino-hal"
 version = "0.1.0"
 source = "git+https://github.com/rahix/avr-hal?rev=190f2c3cb8d29e10f71119352b912369dc5a1fb7#190f2c3cb8d29e10f71119352b912369dc5a1fb7"
@@ -85,7 +74,6 @@ checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
 name = "blink"
 version = "0.1.0"
 dependencies = [
- "ag-lcd",
  "arduino-hal",
  "avr-device",
  "embedded-hal",
@@ -94,6 +82,7 @@ dependencies = [
  "panic-halt",
  "pin-utils",
  "port-expander",
+ "shared-bus",
  "ufmt 0.2.0",
 ]
 

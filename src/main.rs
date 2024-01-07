@@ -1,7 +1,12 @@
 #![no_std]
 #![no_main]
 #![feature(abi_avr_interrupt)]
+#![feature(coroutines)]
+#![feature(coroutine_trait)]
+#![feature(iter_from_coroutine)]
+#![feature(never_type)]
 
+mod ag_lcd;
 mod blinks;
 mod executor;
 mod futures;
@@ -13,7 +18,7 @@ use core::cell::RefCell;
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
-    futures::{delay::Delay, join::join4},
+    futures::{delay::Delay, join::join3},
     timers::millis_init,
 };
 
@@ -84,7 +89,7 @@ fn main() -> ! {
     ufmt::uwriteln!(&mut serial, "C").unwrap();
     let executor = Executor::new();
 
-    executor.block_on(join4(
+    executor.block_on(join3(
         async {
             loop {
                 sos(&mut onboard_led).await;
@@ -98,15 +103,7 @@ fn main() -> ! {
         },
         async {
             Delay::wait_for(2000).await;
-            loop {
-                lcd::show_moving_text("Steuern", 0, &lcd).await;
-            }
-        },
-        async {
-            Delay::wait_for(2000).await;
-            loop {
-                lcd::show_moving_text("sind Raub!", 1, &lcd).await;
-            }
+            lcd::show_moving_text(("Steuern", "sind Raub!"), &lcd).await;
         },
     ));
 

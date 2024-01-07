@@ -17,8 +17,8 @@ nb = "0.1.2"
 embedded-hal = "0.2.3"
 pin-utils = "0.1.0"
 heapless = "0.8.0"
-ag-lcd = { version = "0.2.0", features = ["i2c"] }
 port-expander = "0.3"
+shared-bus = "0.2"
 
 [dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"

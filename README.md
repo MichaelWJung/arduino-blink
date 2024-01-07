@@ -19,7 +19,10 @@ Rust project for the _Arduino Uno_.
 [`ravedude`]: https://crates.io/crates/ravedude
 
 ## License
-Licensed under either of
+Due to imported code from a GNU GPL library, this project is licensed under the
+GNU General Public License v3.0.
+
+Code outside of the ag_lcd module may also be licensed under either of
 
  - Apache License, Version 2.0
    ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
