@@ -140,6 +140,7 @@ generate! {
 /// assert_eq!(pair, (1, 2));
 /// # });
 /// ```
+#[allow(dead_code)]
 pub fn join<Fut1, Fut2>(future1: Fut1, future2: Fut2) -> Join<Fut1, Fut2>
 where
     Fut1: Future,

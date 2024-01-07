@@ -5,17 +5,22 @@
 mod blinks;
 mod executor;
 mod futures;
+mod lcd;
 mod timers;
+
+use core::cell::RefCell;
 
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
-    futures::{delay::Delay, join::join},
+    futures::{delay::Delay, join::join4},
     timers::millis_init,
 };
 
+use ag_lcd::{Cursor, LcdDisplay, Lines};
 use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer2Pwm};
 use panic_halt as _;
+use port_expander::dev::pcf8574::Pcf8574;
 
 type Serial = arduino_hal::Usart<
     arduino_hal::pac::USART0,
@@ -43,6 +48,20 @@ fn main() -> ! {
     }
     ufmt::uwriteln!(&mut serial, "Booting up").unwrap();
 
+    let delay = arduino_hal::Delay::new();
+
+    let sda = pins.a4.into_pull_up_input();
+    let scl = pins.a5.into_pull_up_input();
+
+    let i2c_bus = arduino_hal::i2c::I2c::new(dp.TWI, sda, scl, 50000);
+    let mut i2c_expander = Pcf8574::new(i2c_bus, true, true, true);
+
+    let lcd: LcdDisplay<_, _> = LcdDisplay::new_pcf8574(&mut i2c_expander, delay)
+        .with_cursor(Cursor::Off)
+        .with_lines(Lines::TwoLines)
+        .build();
+    let lcd = RefCell::new(lcd);
+
     // Configure INT0 for rising edge. 0x02 would be falling edge.
     dp.EXINT.eicra.modify(|_, w| w.isc0().bits(0x03));
     // Enable the INT0 interrupt source.
@@ -64,7 +83,8 @@ fn main() -> ! {
 
     ufmt::uwriteln!(&mut serial, "C").unwrap();
     let executor = Executor::new();
-    executor.block_on(join(
+
+    executor.block_on(join4(
         async {
             loop {
                 sos(&mut onboard_led).await;
@@ -74,6 +94,18 @@ fn main() -> ! {
             Delay::wait_for(1000).await;
             loop {
                 pulse(&mut pwm_led).await;
+            }
+        },
+        async {
+            Delay::wait_for(2000).await;
+            loop {
+                lcd::show_moving_text("Steuern", 0, &lcd).await;
+            }
+        },
+        async {
+            Delay::wait_for(2000).await;
+            loop {
+                lcd::show_moving_text("sind Raub!", 1, &lcd).await;
             }
         },
     ));
