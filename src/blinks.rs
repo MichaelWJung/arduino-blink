@@ -2,7 +2,7 @@ use crate::futures::delay::Delay;
 
 use arduino_hal::port::mode::{Output, PwmOutput};
 use arduino_hal::port::{Pin, PinOps};
-use arduino_hal::simple_pwm::{PwmPinOps, Timer2Pwm};
+use arduino_hal::simple_pwm::{PwmPinOps, Timer1Pwm};
 
 const MORSE_UNIT: u32 = 250;
 
@@ -30,13 +30,13 @@ where
     }
 }
 
-pub async fn pulse<X>(led: &mut Pin<PwmOutput<Timer2Pwm>, X>)
+pub async fn pulse<X>(led: &mut Pin<PwmOutput<Timer1Pwm>, X>)
 where
-    X: PwmPinOps<Timer2Pwm>,
+    X: PwmPinOps<Timer1Pwm>,
 {
     led.enable();
     loop {
-        for x in (0..=255).chain((0..=254).rev()) {
+        for x in (0..=255).chain((1..=254).rev()) {
             led.set_duty(x);
             Delay::wait_for(10).await;
         }

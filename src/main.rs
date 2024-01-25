@@ -9,6 +9,7 @@
 mod ag_lcd;
 mod blinks;
 mod executor;
+mod freq_pin;
 mod futures;
 mod lcd;
 mod timers;
@@ -18,12 +19,13 @@ use core::cell::RefCell;
 use crate::{
     blinks::{pulse, sos},
     executor::Executor,
-    futures::{delay::Delay, join::join3},
+    freq_pin::{Timer2Freq, FreqPinPD3},
+    futures::{delay::Delay, join::join4},
     timers::millis_init,
 };
 
 use ag_lcd::{Cursor, LcdDisplay, Lines};
-use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer2Pwm};
+use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer1Pwm};
 use panic_halt as _;
 use port_expander::dev::pcf8574::Pcf8574;
 
@@ -72,14 +74,20 @@ fn main() -> ! {
     // Enable the INT0 interrupt source.
     dp.EXINT.eimsk.modify(|_, w| w.int0().set_bit());
 
-    pins.d2.into_pull_up_input();
-
     ufmt::uwriteln!(&mut serial, "A").unwrap();
     millis_init(&dp.TC0);
-    let timer = Timer2Pwm::new(dp.TC2, Prescaler::Prescale64);
-    let mut pwm_led = pins.d3.into_output().into_pwm(&timer);
+
+    let timer1 = Timer1Pwm::new(dp.TC1, Prescaler::Prescale64);
+    let mut pwm_led = pins.d9.into_output().into_pwm(&timer1);
     let mut onboard_led = pins.d13.into_output();
     onboard_led.set_high();
+
+    let mut direction = pins.d6.into_output();
+    direction.set_high();
+    let mut enable_motors = pins.d8.into_output();
+    enable_motors.set_low();
+    let timer2 = Timer2Freq::new(dp.TC2, Prescaler::Prescale256);
+    let mut steps = FreqPinPD3::new(&timer2, pins.d3.into_output());
 
     ufmt::uwriteln!(&mut serial, "B").unwrap();
     dbgprint!("ABC");
@@ -89,7 +97,7 @@ fn main() -> ! {
     ufmt::uwriteln!(&mut serial, "C").unwrap();
     let executor = Executor::new();
 
-    executor.block_on(join3(
+    executor.block_on(join4(
         async {
             loop {
                 sos(&mut onboard_led).await;
@@ -103,7 +111,19 @@ fn main() -> ! {
         },
         async {
             Delay::wait_for(2000).await;
-            lcd::show_moving_text(("Steuern", "sind Raub!"), &lcd).await;
+            lcd::show_moving_text(("Mag Loop", "Control"), &lcd).await;
+        },
+        async {
+            loop {
+                let max = 1000;
+                steps.enable();
+                for x in (40..=max).chain((41..=(max-1)).rev()) {
+                    steps.set_freq(x);
+                    Delay::wait_for(100).await;
+                }
+                steps.disable();
+                Delay::wait_for(10000).await;
+            }
         },
     ));
 
