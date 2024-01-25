@@ -85,9 +85,12 @@ fn main() -> ! {
     let mut direction = pins.d6.into_output();
     direction.set_high();
     let mut enable_motors = pins.d8.into_output();
-    enable_motors.set_low();
+    enable_motors.set_high();
     let timer2 = Timer2Freq::new(dp.TC2, Prescaler::Prescale256);
     let mut steps = FreqPinPD3::new(&timer2, pins.d3.into_output());
+
+    let button1 = pins.d11.into_pull_up_input();
+    let button2 = pins.d10.into_pull_up_input();
 
     ufmt::uwriteln!(&mut serial, "B").unwrap();
     dbgprint!("ABC");
@@ -114,15 +117,21 @@ fn main() -> ! {
             lcd::show_moving_text(("Mag Loop", "Control"), &lcd).await;
         },
         async {
+            steps.set_freq(500);
             loop {
-                let max = 1000;
-                steps.enable();
-                for x in (40..=max).chain((41..=(max-1)).rev()) {
-                    steps.set_freq(x);
-                    Delay::wait_for(100).await;
+                if button1.is_low() {
+                    enable_motors.set_low();
+                    direction.set_high();
+                    steps.enable();
+                } else if button2.is_low() {
+                    enable_motors.set_low();
+                    direction.set_low();
+                    steps.enable();
+                } else {
+                    enable_motors.set_high();
+                    steps.disable();
                 }
-                steps.disable();
-                Delay::wait_for(10000).await;
+                Delay::wait_for(100).await;
             }
         },
     ));
