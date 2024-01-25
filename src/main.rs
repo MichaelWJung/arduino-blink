@@ -5,6 +5,7 @@
 #![feature(coroutine_trait)]
 #![feature(iter_from_coroutine)]
 #![feature(never_type)]
+#![feature(panic_info_message)]
 
 mod ag_lcd;
 mod blinks;
@@ -14,7 +15,7 @@ mod futures;
 mod lcd;
 mod timers;
 
-use core::cell::RefCell;
+use core::{cell::RefCell, panic::PanicInfo};
 
 use crate::{
     blinks::{pulse, sos},
@@ -26,7 +27,6 @@ use crate::{
 
 use ag_lcd::{Cursor, LcdDisplay, Lines};
 use arduino_hal::simple_pwm::{IntoPwmPin, Prescaler, Timer1Pwm};
-use panic_halt as _;
 use port_expander::dev::pcf8574::Pcf8574;
 
 type Serial = arduino_hal::Usart<
@@ -39,10 +39,29 @@ static mut SERIAL_PTR: *mut Serial = core::ptr::null_mut();
 
 macro_rules! dbgprint {
     ($($args:expr),*) => {{
-        unsafe { ufmt::uwriteln!(&mut *crate::SERIAL_PTR, $($args)*).unwrap(); }
+        unsafe { ufmt::uwriteln!(&mut *crate::SERIAL_PTR, $($args),*).unwrap(); }
     }};
 }
 pub(crate) use dbgprint;
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    if let Some(location) = info.location() {
+        dbgprint!("panic occurred in file '{}' at line {}", location.file(), location.line());
+        if let Some(msg) = info.message() {
+            if let Some(s) = msg.as_str() {
+                dbgprint!("{}", s);
+            } else {
+                dbgprint!("cannot print payload");
+            }
+        } else {
+            dbgprint!("cannot print payload");
+        }
+    } else {
+        dbgprint!("panic occurred but can't get location information...");
+    }
+    loop {}
+}
 
 #[arduino_hal::entry]
 fn main() -> ! {
